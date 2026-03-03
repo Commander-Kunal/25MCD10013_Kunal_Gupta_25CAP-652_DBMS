@@ -1,90 +1,126 @@
-
 -- Query 1
-
--- Create Student table
-CREATE TABLE IF NOT EXISTS Student (
-    StudentID INT PRIMARY KEY,
-    StudentName VARCHAR(50),
-    Marks INT,
-    EnrollmentStatus VARCHAR(20)
+-- Create Staff table
+CREATE TABLE IF NOT EXISTS Staff (
+    StaffID INT PRIMARY KEY,
+    StaffName VARCHAR(50),
+    MonthlyPay INT
 );
 
 -- Insert sample data
-INSERT INTO Student VALUES (201, 'Arjun', 78, 'Enrolled')
-ON CONFLICT (StudentID) DO NOTHING;
+INSERT INTO Staff VALUES (101, 'Dr. Meera', 70000)
+ON CONFLICT (StaffID) DO NOTHING;
 
-INSERT INTO Student VALUES (202, 'Sneha', 85, 'Dropped')
-ON CONFLICT (StudentID) DO NOTHING;
+INSERT INTO Staff VALUES (102, 'Nurse Karan', 45000)
+ON CONFLICT (StaffID) DO NOTHING;
 
-INSERT INTO Student VALUES (203, 'Ritika', 91, 'Enrolled')
-ON CONFLICT (StudentID) DO NOTHING;
+INSERT INTO Staff VALUES (103, 'Technician Isha', 38000)
+ON CONFLICT (StaffID) DO NOTHING;
 
--- Create View to show only Enrolled Students
-CREATE OR REPLACE VIEW EnrolledStudents AS
-SELECT StudentID, StudentName, Marks
-FROM Student
-WHERE EnrollmentStatus = 'Enrolled';
+-- Cursor block
+DO $$
+DECLARE
+    staff_record RECORD;
+    staff_cursor CURSOR FOR
+        SELECT StaffID, StaffName, MonthlyPay FROM Staff;
+BEGIN
+    OPEN staff_cursor;
 
--- Query the View
-SELECT * FROM EnrolledStudents;
+    LOOP
+        FETCH staff_cursor INTO staff_record;
+        EXIT WHEN NOT FOUND;
 
-------------------------------------------------------------------------------------------------------------------------
+        RAISE NOTICE 'ID: %, Name: %, Monthly Pay: %',
+        staff_record.StaffID,
+        staff_record.StaffName,
+        staff_record.MonthlyPay;
 
+    END LOOP;
+
+    CLOSE staff_cursor;
+END $$;
+
+------------------------------------------------------------------------------------------------
 -- Query 2
 
--- Create Course table
-CREATE TABLE IF NOT EXISTS Course (
-    CourseID INT PRIMARY KEY,
-    CourseName VARCHAR(50)
-);
+-- Add YearsOfService column
+ALTER TABLE Staff
+ADD COLUMN IF NOT EXISTS YearsOfService INT;
 
--- Insert sample courses
-INSERT INTO Course VALUES (501, 'Computer Science')
-ON CONFLICT (CourseID) DO NOTHING;
+-- Update sample service values
+UPDATE Staff SET YearsOfService = 3 WHERE StaffID = 101;
+UPDATE Staff SET YearsOfService = 6 WHERE StaffID = 102;
+UPDATE Staff SET YearsOfService = 9 WHERE StaffID = 103;
 
-INSERT INTO Course VALUES (502, 'Mathematics')
-ON CONFLICT (CourseID) DO NOTHING;
+-- Cursor to update salary based on years of service
+DO $$
+DECLARE
+    staff_record RECORD;
+    staff_cursor CURSOR FOR
+        SELECT StaffID, MonthlyPay, YearsOfService FROM Staff;
+BEGIN
+    OPEN staff_cursor;
 
-INSERT INTO Course VALUES (503, 'Physics')
-ON CONFLICT (CourseID) DO NOTHING;
+    LOOP
+        FETCH staff_cursor INTO staff_record;
+        EXIT WHEN NOT FOUND;
 
--- Add CourseID column to Student table
-ALTER TABLE Student
-ADD COLUMN IF NOT EXISTS CourseID INT;
+        -- Salary update logic
+        IF staff_record.YearsOfService >= 8 THEN
+            UPDATE Staff
+            SET MonthlyPay = MonthlyPay + 8000
+            WHERE StaffID = staff_record.StaffID;
 
--- Assign courses to students
-UPDATE Student SET CourseID = 501 WHERE StudentID = 201;
-UPDATE Student SET CourseID = 502 WHERE StudentID = 202;
-UPDATE Student SET CourseID = 503 WHERE StudentID = 203;
+        ELSIF staff_record.YearsOfService >= 5 THEN
+            UPDATE Staff
+            SET MonthlyPay = MonthlyPay + 5000
+            WHERE StaffID = staff_record.StaffID;
 
--- Create View joining Student and Course
-CREATE OR REPLACE VIEW StudentCourseView AS
-SELECT 
-    s.StudentID,
-    s.StudentName,
-    s.Marks,
-    c.CourseName
-FROM Student s
-JOIN Course c
-ON s.CourseID = c.CourseID;
+        ELSE
+            UPDATE Staff
+            SET MonthlyPay = MonthlyPay + 2000
+            WHERE StaffID = staff_record.StaffID;
 
--- Query the View
-SELECT * FROM StudentCourseView;
+        END IF;
 
----------------------------------------------------------------------------------------------------------------------------------------------
+    END LOOP;
 
+    CLOSE staff_cursor;
+END $$;
+
+-- View updated table
+SELECT * FROM Staff;
+
+--------------------------------------------------------------------------------------------------------------
 -- Query 3
--- Create summarization view showing course statistics
-CREATE OR REPLACE VIEW CourseSummaryView AS
-SELECT 
-    c.CourseName,
-    COUNT(s.StudentID) AS TotalStudents,
-    AVG(s.Marks) AS AverageMarks,
-    SUM(s.Marks) AS TotalMarks
-FROM Student s
-JOIN Course c
-ON s.CourseID = c.CourseID
-GROUP BY c.CourseName;
 
--- Query the View
-SELECT * FROM CourseSummaryView;
+DO $$
+DECLARE
+    staff_record RECORD;
+    staff_cursor CURSOR FOR
+        SELECT StaffID, StaffName, MonthlyPay FROM Staff;
+BEGIN
+    OPEN staff_cursor;
+
+    -- Check if cursor has data
+    FETCH staff_cursor INTO staff_record;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No records found in Staff table.';
+    ELSE
+        LOOP
+            RAISE NOTICE 'Processing Staff ID: %, Name: %, Monthly Pay: %',
+            staff_record.StaffID,
+            staff_record.StaffName,
+            staff_record.MonthlyPay;
+
+            FETCH staff_cursor INTO staff_record;
+            EXIT WHEN NOT FOUND;
+        END LOOP;
+    END IF;
+
+    CLOSE staff_cursor;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'An error occurred: %', SQLERRM;
+END $$;
